@@ -77,50 +77,36 @@ class CKFinder_Connector_CommandHandler_RenameFolder extends CKFinder_Connector_
         }
 
         $oldFolderPath = substr($this->_currentFolder->getServerPath(), 1, -1);
-        $newFolderPath = dirname($oldFolderPath).'/'.$newFolderName;
+        $newFolderPath = ltrim(dirname($this->_currentFolder->getServerPath()).$newFolderName, '/');
 
         global $config;
         $s3 = s3_con();
 
         $copied = true;
+        $deleted = true;
         $items = $s3->getBucket($config['AmazonS3']['Bucket'], $oldFolderPath);
         foreach ($items as $item) {
-            //TODO: Possible bug, if repeating paths occur, it will mess up folder structure. Need to replace only first instance
-            $newItemName = str_replace($oldFolderPath, $newFolderPath, $item['name']);
-            $copy = $s3->copyObject($config['AmazonS3']['Bucket'], $item['name'], $config['AmazonS3']['Bucket'], $newItemName);
-            if ($copy === false) {
-                $copied = false;
+            if (rtrim($item['name'], '/') !== $oldFolderPath) {
+                $newItemName = str_replace($oldFolderPath, $newFolderPath, $item['name']);
+                error_log('$item[name] = ' . $item['name']);
+                error_log('$newItemName = ' . $newItemName);
+                $copy = $s3->copyObject($config['AmazonS3']['Bucket'], $item['name'], $config['AmazonS3']['Bucket'], $newItemName, $s3::ACL_PUBLIC_READ);
+                if ($copy === false) {
+                    $copied = false;
+                } else {
+                    $deleted = $deleted && $s3->deleteObject($config['AmazonS3']['Bucket'], $item['name']);
+                }
             }
         }
-
-        $deleted = true;
-        foreach ($items as $item) {
-            $deleted = $deleted && $s3->deleteObject($config['AmazonS3']['Bucket'], $item['name']);
-        }
-
-
-//        $bMoved = false;
-
-//        if (!is_dir($oldFolderPath)) {
-//            $this->_errorHandler->throwError(CKFINDER_CONNECTOR_ERROR_INVALID_REQUEST);
-//        }
-
-        //let's calculate new folder name
-
-
-//        if (file_exists(rtrim($newFolderPath, '/'))) {
-//            $this->_errorHandler->throwError(CKFINDER_CONNECTOR_ERROR_ALREADY_EXIST);
-//        }
-
-//        $bMoved = @rename($oldFolderPath, $newFolderPath);
 
         if (!$copied || !$deleted) {
             $this->_errorHandler->throwError(CKFINDER_CONNECTOR_ERROR_ACCESS_DENIED);
         } else {
-//            $newThumbsServerPath = dirname($this->_currentFolder->getThumbsServerPath()) . '/' . $newFolderName . '/';
-//            if (!@rename($this->_currentFolder->getThumbsServerPath(), $newThumbsServerPath)) {
-//                CKFinder_Connector_Utils_FileSystem::unlink($this->_currentFolder->getThumbsServerPath());
-//            }
+            $s3->deleteObject($config['AmazonS3']['Bucket'], $oldFolderPath);
+            $newThumbsServerPath = dirname($this->_currentFolder->getThumbsServerPath()) . '/' . $newFolderName . '/';
+            if (is_dir($this->_currentFolder->getThumbsServerPath()) && !@rename($this->_currentFolder->getThumbsServerPath(), $newThumbsServerPath)) {
+                CKFinder_Connector_Utils_FileSystem::unlink($this->_currentFolder->getThumbsServerPath());
+            }
         }
 
         $newFolderPath = preg_replace(",[^/]+/?$,", $newFolderName, $this->_currentFolder->getClientPath()) . '/';

@@ -138,11 +138,16 @@ class CKFinder_Connector_CommandHandler_FileUpload extends CKFinder_Connector_Co
 
         //TODO: Check if file exists and use:
         //$sFileName = CKFinder_Connector_Utils_FileSystem::autoRename($sServerDir, $sFileName);
-
+        
+        $sFilePath = tempnam(sys_get_temp_dir(), 's3_upload_');
+        if (false === move_uploaded_file($uploadedFile['tmp_name'], $sFilePath)) {
+            $this->_errorHandler->throwError(CKFINDER_CONNECTOR_ERROR_ACCESS_DENIED);
+        }
         global $config;
         $s3 = s3_con();
 
-        if (!$s3->putObject($s3->inputResource(fopen($uploadedFile['tmp_name'], 'rb'), filesize($uploadedFile['tmp_name'])), $config['AmazonS3']['Bucket'], $fileName, $s3::ACL_PUBLIC_READ)) {
+        if (!$s3->putObject($s3->inputResource(fopen($sFilePath, 'rb'), filesize($sFilePath)), $config['AmazonS3']['Bucket'], $fileName, $s3::ACL_PUBLIC_READ)) {
+            @unlink($sFilePath);
             $this->_errorHandler->throwError(CKFINDER_CONNECTOR_ERROR_UNAUTHORIZED);
         }
 
@@ -179,6 +184,7 @@ class CKFinder_Connector_CommandHandler_FileUpload extends CKFinder_Connector_Co
 //        }
 
         if (!$_config->checkSizeAfterScaling()) {
+            @unlink($sFilePath);
             $this->_errorHandler->throwError($iErrorNumber, true, false);
         }
 
@@ -187,7 +193,22 @@ class CKFinder_Connector_CommandHandler_FileUpload extends CKFinder_Connector_Co
         $_imagesConfig = $_config->getImagesConfig();
 
         if ($_imagesConfig->getMaxWidth()>0 && $_imagesConfig->getMaxHeight()>0 && $_imagesConfig->getQuality()>0) {
-            CKFinder_Connector_CommandHandler_Thumbnail::createThumb($sFilePath, $sFilePath, $_imagesConfig->getMaxWidth(), $_imagesConfig->getMaxHeight(), $_imagesConfig->getQuality(), true) ;
+            $thumbFilePath = CKFinder_Connector_Utils_FileSystem::combinePaths($this->_currentFolder->getThumbsServerPath(), $sFileName);
+            error_log('$sFilePath = '.$sFilePath);
+            error_log('$sFileName = '.$sFileName);
+            error_log('$this->_currentFolder->getThumbsServerPath() = '.$this->_currentFolder->getThumbsServerPath());
+            error_log('$thumbFilePath = '.$thumbFilePath);
+            global $baseUrl;
+            $thumbDirectory = dirname($thumbFilePath);
+            error_log('$thumbDirectory = '.$thumbDirectory);
+            // If the thumbnail directory does not exists, create it now
+            if (!is_dir($thumbDirectory)) {
+                error_log('directory does not exist: ' . $thumbDirectory);
+                if (!mkdir($thumbDirectory, $config['ChmodFolders'], true)) {
+                    error_log('failed to create directory for thumbnails: ' . $thumbDirectory);
+                }
+            }
+            CKFinder_Connector_CommandHandler_Thumbnail::createThumb($sFilePath, $thumbFilePath, $_imagesConfig->getMaxWidth(), $_imagesConfig->getMaxHeight(), $_imagesConfig->getQuality(), true);
         }
 
         if ($_config->checkSizeAfterScaling()) {
@@ -198,10 +219,11 @@ class CKFinder_Connector_CommandHandler_FileUpload extends CKFinder_Connector_Co
                 $this->_errorHandler->throwError(CKFINDER_CONNECTOR_ERROR_UPLOADED_TOO_BIG);
             }
             else {
+                @unlink($sFilePath);
                 $this->_errorHandler->throwError($iErrorNumber, true, false);
             }
         }
-
+        @unlink($sFilePath);
         CKFinder_Connector_Core_Hooks::run('AfterFileUpload', array(&$this->_currentFolder, &$uploadedFile, &$sFilePath));
     }
 }

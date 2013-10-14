@@ -64,13 +64,23 @@ class CKFinder_Connector_CommandHandler_DownloadFile extends CKFinder_Connector_
         if (!$_resourceTypeInfo->checkExtension($fileName, false)) {
             $this->_errorHandler->throwError(CKFINDER_CONNECTOR_ERROR_INVALID_REQUEST);
         }
-
-        $filePath = CKFinder_Connector_Utils_FileSystem::combinePaths($this->_currentFolder->getServerPath(), $fileName);
-        if ($_resourceTypeInfo->checkIsHiddenFile($fileName) || !file_exists($filePath) || !is_file($filePath)) {
+        // $filePath = CKFinder_Connector_Utils_FileSystem::combinePaths($this->_currentFolder->getServerPath(), $fileName);
+        $sServerDir = substr($this->_currentFolder->getServerPath(), 1);
+        global $config, $baseUrl;
+        $s3 = s3_con();
+        $fileInfo = $s3->getObjectInfo($config['AmazonS3']['Bucket'], $sServerDir.$fileName);
+        if (!$fileInfo) {
             $this->_errorHandler->throwError(CKFINDER_CONNECTOR_ERROR_FILE_NOT_FOUND);
         }
 
         $fileName = CKFinder_Connector_Utils_FileSystem::convertToConnectorEncoding($fileName);
+        
+        $tempFilename = tempnam(sys_get_temp_dir(), 's3_download_');
+        $getResponse = $s3->getObject($config['AmazonS3']['Bucket'], $sServerDir.$fileName, $tempFilename);
+        if (!$getResponse) {
+            @unlink($tempFilename);
+            $this->_errorHandler->throwError(CKFINDER_CONNECTOR_ERROR_FILE_NOT_FOUND);
+        }
 
         header("Cache-Control: cache, must-revalidate");
         header("Pragma: public");
@@ -87,8 +97,9 @@ class CKFinder_Connector_CommandHandler_DownloadFile extends CKFinder_Connector_
             header("Content-type: application/octet-stream; name=\"" . $fileName . "\"");
             header("Content-Disposition: attachment; filename=\"" . $encodedName. "\"");
         }
-        header("Content-Length: " . filesize($filePath));
-        CKFinder_Connector_Utils_FileSystem::sendFile($filePath);
+        header("Content-Length: " . $fileInfo['size']);
+        readfile($tempFilename);
+        @unlink($tempFilename);
         exit;
     }
 }

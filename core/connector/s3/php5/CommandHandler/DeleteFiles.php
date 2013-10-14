@@ -134,11 +134,9 @@ class CKFinder_Connector_CommandHandler_DeleteFiles extends CKFinder_Connector_C
           continue;
         } else {
           $deleted++;
-
-          //TODO: Delete thumbnail
-          //$thumbPath = CKFinder_Connector_Utils_FileSystem::combinePaths($this->_currentFolder->getThumbsServerPath(), $name);
-
-          //@unlink($thumbPath);
+          // Delete thumbnail
+          $thumbPath = CKFinder_Connector_Utils_FileSystem::combinePaths($this->_currentFolder->getThumbsServerPath(), $name);
+          CKFinder_Connector_Utils_FileSystem::unlink($thumbPath);
         }
       }
     }

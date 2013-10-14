@@ -83,7 +83,7 @@ class CKFinder_Connector_CommandHandler_GetFiles extends CKFinder_Connector_Comm
 
         $s3 = s3_con();
         $items = $s3->getBucket($config['AmazonS3']['Bucket'], substr($_sServerDir, 1), null, null, '/', false);
-
+        
         foreach ($items as $item) {
             //Make sure it's not empty (root folder usually) and not a sub-folder (evidenced from prefix key)
             if ((array_key_exists('size', $item) && $item['size'] !== 0) && !array_key_exists('prefix', $item)) {
@@ -100,6 +100,7 @@ class CKFinder_Connector_CommandHandler_GetFiles extends CKFinder_Connector_Comm
             $_showThumbs = (!empty($_GET['showThumbs']) && $_GET['showThumbs'] == 1);
             if ($_thumbnailsConfig->getIsEnabled() && ($_thumbnailsConfig->getDirectAccess() || $_showThumbs)) {
                 $_thumbServerPath = $this->_currentFolder->getThumbsServerPath();
+                error_log('$_thumbServerPath = '.$_thumbServerPath);
             }
 
             natcasesort($fileNames);

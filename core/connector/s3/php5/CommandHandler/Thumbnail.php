@@ -75,18 +75,38 @@ class CKFinder_Connector_CommandHandler_Thumbnail extends CKFinder_Connector_Com
 
         $sourceFilePath = CKFinder_Connector_Utils_FileSystem::combinePaths($this->_currentFolder->getServerPath(), $fileName);
 
-        if ($_resourceTypeInfo->checkIsHiddenFile($fileName) || !file_exists($sourceFilePath)) {
+        if ($_resourceTypeInfo->checkIsHiddenFile($fileName)) {
             $this->_errorHandler->throwError(CKFINDER_CONNECTOR_ERROR_FILE_NOT_FOUND);
         }
 
         $thumbFilePath = CKFinder_Connector_Utils_FileSystem::combinePaths($this->_currentFolder->getThumbsServerPath(), $fileName);
-
+ 
         // If the thumbnail file doesn't exists, create it now.
         if (!file_exists($thumbFilePath)) {
-            if(!$this->createThumb($sourceFilePath, $thumbFilePath, $_thumbnails->getMaxWidth(), $_thumbnails->getMaxHeight(), $_thumbnails->getQuality(), true, $_thumbnails->getBmpSupported())) {
+            global $config, $baseUrl;
+            $thumbDirectory = dirname($thumbFilePath);
+            // If the thumbnail directory does not exists, create it now
+            if (!is_dir($thumbDirectory)) {
+                if (!mkdir($thumbDirectory, $config['ChmodFolders'], true)) {
+                    error_log('failed to create directory for thumbnails: ' . $thumbDirectory);
+                }
+            }
+            $sServerDir = substr($this->_currentFolder->getServerPath(), 1);
+            $s3 = s3_con();
+            $tempFilename = tempnam(sys_get_temp_dir(), 's3_download_');
+            // download file from S3
+            $getResponse = $s3->getObject($config['AmazonS3']['Bucket'], $sServerDir.$fileName, $tempFilename);
+            if (!$getResponse) {
+                @unlink($tempFilename);
+                $this->_errorHandler->throwError(CKFINDER_CONNECTOR_ERROR_FILE_NOT_FOUND);
+            }
+            if(!$this->createThumb($tempFilename, $thumbFilePath, $_thumbnails->getMaxWidth(), $_thumbnails->getMaxHeight(), $_thumbnails->getQuality(), true, $_thumbnails->getBmpSupported())) {
+                @unlink($tempFilename);
                 $this->_errorHandler->throwError(CKFINDER_CONNECTOR_ERROR_ACCESS_DENIED);
             }
+            @unlink($tempFilename);
         }
+        
 
         $size = filesize($thumbFilePath);
         $sourceImageAttr = getimagesize($thumbFilePath);

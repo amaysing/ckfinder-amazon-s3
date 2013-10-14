@@ -172,6 +172,8 @@ class CKFinder_Connector_CommandHandler_MoveFiles extends CKFinder_Connector_Com
                 if ($copy !== false) {
                     if ($s3->deleteObject($config['AmazonS3']['Bucket'], $sourceFilePath)) {
                         $moved++;
+                        $thumbPath = CKFinder_Connector_Utils_FileSystem::combinePaths($this->_currentFolder->getThumbsServerPath(), $name);
+                        CKFinder_Connector_Utils_FileSystem::unlink($thumbPath);
                     } else {
                         $errorCode = CKFINDER_CONNECTOR_ERROR_COPY_FAILED;
                         $this->appendErrorNode($oErrorsNode, $errorCode, $name, $type, $path);

@@ -94,6 +94,6 @@ class CKFinder_Connector_CommandHandler_DeleteFolder extends CKFinder_Connector_
 //            $this->_errorHandler->throwError(CKFINDER_CONNECTOR_ERROR_ACCESS_DENIED);
 //        }
 //
-//        CKFinder_Connector_Utils_FileSystem::unlink($this->_currentFolder->getThumbsServerPath());
+        CKFinder_Connector_Utils_FileSystem::unlink($this->_currentFolder->getThumbsServerPath());
     }
 }
